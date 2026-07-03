@@ -1,0 +1,166 @@
+// VCC Digital Twin — core engineering schema
+// Hierarchy: Train -> Car -> System -> Subsystem -> Equipment -> Connector -> Pin -> Wire -> Drawing
+// Every model carries validationStatus so trace/AI/GSD never depend on unverified rows.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ValidationStatus {
+  VERIFIED
+  UNVERIFIED
+  SYNTHETIC
+  DEPRECATED
+}
+
+enum Role {
+  ADMIN        // full write access, can mark wires VERIFIED
+  ENGINEER     // can run validation, edit diagnostics/knowledge
+  VIEWER       // read only (trainer/student, manager dashboards)
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(VIEWER)
+  createdAt    DateTime @default(now())
+}
+
+model Train {
+  id        String   @id @default(cuid())
+  code      String   @unique // e.g. KMRCL-RS3R-01
+  name      String
+  cars      Car[]
+  createdAt DateTime @default(now())
+}
+
+model Car {
+  id        String   @id @default(cuid())
+  trainId   String
+  train     Train    @relation(fields: [trainId], references: [id])
+  position  Int       // 1..6 in DMC-TC-MC-MC-TC-DMC formation
+  carType   String    // DMC, TC, MC
+  systems   System[]
+
+  @@unique([trainId, position])
+}
+
+model System {
+  id          String       @id @default(cuid())
+  carId       String
+  car         Car          @relation(fields: [carId], references: [id])
+  code        String       // TRAC, BRAKE, DOOR, APS, VAC, LIGHT, COMMS, TMS
+  name        String
+  subsystems  Subsystem[]
+  diagnostics Diagnostic[]
+  vccKnowledge VCCKnowledge?
+
+  @@index([code])
+}
+
+model Subsystem {
+  id        String      @id @default(cuid())
+  systemId  String
+  system    System      @relation(fields: [systemId], references: [id])
+  code      String
+  name      String
+  equipment Equipment[]
+}
+
+model Equipment {
+  id          String      @id @default(cuid())
+  subsystemId String
+  subsystem   Subsystem   @relation(fields: [subsystemId], references: [id])
+  tag         String      // e.g. TRAC-EQ-01
+  name        String
+  drawingId   String?
+  drawing     Drawing?    @relation(fields: [drawingId], references: [id])
+  connectors  Connector[]
+}
+
+model Connector {
+  id          String    @id @default(cuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  designator  String    // e.g. CN-101
+  pins        Pin[]
+
+  @@index([designator])
+}
+
+model Pin {
+  id           String    @id @default(cuid())
+  connectorId  String
+  connector    Connector @relation(fields: [connectorId], references: [id])
+  number       String    // e.g. "1", "12A"
+  function     String?   // e.g. "24V+", "GND", "CAN-H"
+  outWires     Wire[]    @relation("SourcePin")
+  inWires      Wire[]    @relation("DestPin")
+
+  @@unique([connectorId, number])
+}
+
+model Wire {
+  id               String            @id @default(cuid())
+  wireNumber       String            // e.g. W1032
+  sourcePinId      String
+  sourcePin        Pin               @relation("SourcePin", fields: [sourcePinId], references: [id])
+  destPinId        String
+  destPin          Pin               @relation("DestPin", fields: [destPinId], references: [id])
+  cable            String?
+  trainline        String?
+  drawingId        String?
+  drawing          Drawing?          @relation(fields: [drawingId], references: [id])
+  validationStatus ValidationStatus  @default(UNVERIFIED)
+
+  @@unique([wireNumber, sourcePinId, destPinId])
+  @@index([wireNumber])
+  @@index([validationStatus])
+}
+
+model Drawing {
+  id            String      @id @default(cuid())
+  number        String      // base number e.g. 942-38409
+  revision      String?     // A, B, C... null = base
+  parentId      String?
+  parent        Drawing?    @relation("Revisions", fields: [parentId], references: [id])
+  children      Drawing[]   @relation("Revisions")
+  title         String?
+  pdfPath       String?
+  pdfPage       Int?
+  active        Boolean     @default(true)
+  equipment     Equipment[]
+  wires         Wire[]
+
+  @@unique([number, revision])
+  @@index([number])
+}
+
+model Diagnostic {
+  id             String   @id @default(cuid())
+  faultCode      String   @unique
+  description    String
+  systemId       String
+  system         System   @relation(fields: [systemId], references: [id])
+  probableCause  String?
+  testProcedure  String?
+  repairProcedure String?
+}
+
+model VCCKnowledge {
+  id            String  @id @default(cuid())
+  systemId      String  @unique
+  system        System  @relation(fields: [systemId], references: [id])
+  overview      String
+  powerFlow     String?
+  signalFlow    String?
+  testingNotes  String?
+}

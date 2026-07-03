@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vcc
+      POSTGRES_PASSWORD: vcc
+      POSTGRES_DB: vcc_digital_twin
+    ports:
+      - "5432:5432"
+    volumes:
+      - vcc_pgdata:/var/lib/postgresql/data
+volumes:
+  vcc_pgdata:
