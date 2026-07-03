@@ -83,7 +83,7 @@ async function main() {
     },
   });
 
-  await db.vccKnowledge.create({
+  await db.vCCKnowledge.create({
     data: {
       systemId: tracSystem.id,
       overview: "Traction system converts line power to motor drive power for propulsion.",

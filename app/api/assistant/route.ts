@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       include: { sourcePin: { include: { connector: true } }, destPin: { include: { connector: true } } },
       take: 5,
     }),
-    prisma.vccKnowledge.findMany({ take: 10, include: { system: true } }),
+    prisma.vCCKnowledge.findMany({ take: 10, include: { system: true } }),
   ]);
 
   const evidence = {
